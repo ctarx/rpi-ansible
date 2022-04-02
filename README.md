@@ -7,7 +7,7 @@ I install Raspberry Pi OS using Raspberry Pi Imager
 ```shell
 $ sudo apt install rpi-imager
 ```
-`shift+ctrl+x` for and advance options and setup:
+`shift+ctrl+x` for an advance options and setup:
 - hostname
 - disable overscan
 - authorized_keys
