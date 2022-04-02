@@ -1,0 +1,61 @@
+---
+- name: Update raspi-config itself
+  apt: name=raspi-config update_cache=yes state=present cache_valid_time=3600
+
+- name: Enable SPI
+  shell: "raspi-config nonint do_spi 0"
+
+- name: Clone a LCD-show github repository
+  git:
+    repo: https://github.com/goodtft/LCD-show.git
+    dest: /home/pi/LCD-show
+    clone: yes
+    update: yes
+
+- name: Copy over boot overlays
+  copy:
+    src: /home/pi/LCD-show/usr/tft35a-overlay.dtb
+    dest: /boot/overlays/tft35a.dtbo
+    remote_src: yes
+
+- name: Edit /boot/config.txt
+  lineinfile:
+    dest: /boot/config.txt
+    state: present
+    regexp: "^#hdmi_force_hotplug=1"
+    line: "hdmi_force_hotplug=1"
+
+- name: Rotate the screen
+  lineinfile:
+    path: /boot/config.txt
+    line: "dtoverlay=tft35a:rotate=270"
+    create: yes
+
+- name: Edit /boot/cmdline.txt
+  lineinfile:
+    path: /boot/cmdline.txt
+    line: "fbcon=map:10 fbcon=font:VGA8x8"
+    create: yes
+
+- name: console-setup charmap, codeset, font face and font size
+  lineinfile:
+    path: /etc/default/console-setup
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    #charmap
+    - regexp: '^CHARMAP="'
+      line: CHARMAP="UTF-8"
+    #codeset
+    - regexp: '^CODESET="'
+      line: CODESET="guess"
+    #font face
+    - regexp: '^FONTFACE="'
+      line: FONTFACE="Terminus"
+    #font size
+    - regexp: '^FONTSIZE="'
+      line: FONTSIZE="6x12"
+
+#REBOOT
+- name: Reboot the server
+  reboot:

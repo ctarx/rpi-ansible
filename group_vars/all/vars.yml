@@ -1,0 +1,9 @@
+username: pi
+packages:
+  - vim
+  - htop
+  - neofetch
+  - speedtest-cli
+  - curl
+  - wget
+  - git
