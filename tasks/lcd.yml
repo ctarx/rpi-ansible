@@ -54,7 +54,7 @@
       line: FONTFACE="Terminus"
     #font size
     - regexp: '^FONTSIZE="'
-      line: FONTSIZE="6x12"
+      line: FONTSIZE="8x14"
 
 #REBOOT
 - name: Reboot the server
