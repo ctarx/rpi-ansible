@@ -1,5 +1,5 @@
 # rpi-ansible
-> Setup a Raspberry Pi using Ansible
+> Initial setup of a Raspberry Pi with Ansible
 
 ## Install Raspberry Pi OS
 
