@@ -19,6 +19,7 @@ $ sudo apt install rpi-imager
 
 ## Ansible
 ```shell
+$ ssh-copy-id -i ~/.ssh/ansible.pub rpi.ip.address
 $ ansible-playbook run.yml
 ```
 
