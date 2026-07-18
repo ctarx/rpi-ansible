@@ -5,4 +5,3 @@ rpi-srv ansible_host=192.168.1.10
 [servers:vars]
 ansible_connection=ssh
 ansible_user=pi
-ansible_become=yes

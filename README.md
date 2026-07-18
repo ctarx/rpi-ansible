@@ -4,13 +4,13 @@
 
 ## Install Raspberry Pi OS
 
-I install Raspberry Pi OS using Raspberry Pi Imager
+Install Raspberry Pi OS using Raspberry Pi Imager:
 
 ```shell
 sudo apt install rpi-imager
 ```
 
-`shift+ctrl+x` for an advance options and setup:
+Press `Shift+Ctrl+X` to open the advanced options and configure:
 
 - hostname
 - disable overscan
@@ -21,22 +21,33 @@ sudo apt install rpi-imager
 - keyboard layout
 - skip first-run wizard
 
+The inventory uses the `pi` account by default. If you choose another user,
+update `ansible_user` in `hosts` before running Ansible.
+
 ## Ansible
 
+Update the host address in `hosts`, then install the SSH key for the same user
+that Ansible will use:
+
 ```shell
-ssh-copy-id -i ~/.ssh/ansible.pub rpi.ip.address
+ssh-copy-id -i ~/.ssh/ansible.pub pi@192.168.1.10
 ansible-playbook run.yml
 ```
 
+Add `--ask-become-pass` if the remote user requires a password for `sudo`.
+
 ## Extras
 
-LCD-show for 3.5inch RPi Display
+Configure an LCD-show compatible 3.5-inch Raspberry Pi display:
 
 ```shell
-cd tasks
 ansible-playbook lcd.yml
 ```
 
-#### Contact
+The LCD playbook supports both the current `/boot/firmware` layout and the
+legacy `/boot` layout. It reboots the Raspberry Pi only when a boot setting
+changes.
+
+## Contact
 
 Created by [@ctarx](https://web.libera.chat/) - feel free to contact me!

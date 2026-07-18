@@ -1,0 +1,12 @@
+---
+- name: Configure the Raspberry Pi LCD
+  hosts: servers
+  become: true
+
+  tasks:
+    - name: Import LCD configuration tasks
+      ansible.builtin.import_tasks: tasks/lcd.yml
+
+  handlers:
+    - name: Reboot Raspberry Pi
+      ansible.builtin.reboot:

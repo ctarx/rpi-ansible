@@ -1,6 +1,14 @@
 ---
-- hosts: all
-  become: yes
+- name: Configure Raspberry Pi servers
+  hosts: servers
+  become: true
 
   tasks:
-    - import_tasks: tasks/essential.yml
+    - name: Import essential configuration tasks
+      ansible.builtin.import_tasks: tasks/essential.yml
+
+  handlers:
+    - name: Reload SSH
+      ansible.builtin.service:
+        name: ssh
+        state: reloaded

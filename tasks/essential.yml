@@ -1,41 +1,51 @@
+---
 - name: Update packages
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
     upgrade: dist
-    autoclean: yes
-    autoremove: yes
+    cache_valid_time: 3600
 
 - name: Install essential packages
-  package:
+  ansible.builtin.package:
     name: "{{ packages }}"
-    state: latest
+    state: present
 
-- name: Check if a reboot is required.
-  stat:
+- name: Check whether a reboot is required
+  ansible.builtin.stat:
     path: /var/run/reboot-required
-    get_md5: no
   register: reboot_required_file
 
-- name: Reboot the server (if required).
-  reboot:
-  when: reboot_required_file.stat.exists == true
+- name: Reboot the server when required
+  ansible.builtin.reboot:
+  when: reboot_required_file.stat.exists
 
-- name: Disable SSH password auth and root login
-  lineinfile:
-    dest: /etc/ssh/sshd_config
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-    state: present
-    validate: "sshd -t -f %s"
-  with_items:
-    - regexp: "^#PasswordAuthentication"
-      line: "PasswordAuthentication no"
-    - regexp: "^PermitRootLogin"
-      line: "PermitRootLogin no"
-  register: sshd_config
+- name: Ensure the SSH configuration directory exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
-- name: Restart SSH daemon
-  service:
-    name: sshd
-    state: restarted
-  when: sshd_config.changed
+- name: Disable SSH password authentication and root login
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-ansible-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload SSH
+
+- name: Load the SSH hardening configuration first
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: >-
+      ^\s*Include\s+/etc/ssh/sshd_config\.d/00-ansible-hardening\.conf\s*$
+    line: Include /etc/ssh/sshd_config.d/00-ansible-hardening.conf
+    insertbefore: BOF
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload SSH

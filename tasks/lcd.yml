@@ -1,61 +1,131 @@
 ---
-- name: Update raspi-config itself
-  apt: name=raspi-config update_cache=yes state=present cache_valid_time=3600
+- name: Install raspi-config
+  ansible.builtin.apt:
+    name: raspi-config
+    update_cache: true
+    state: present
+    cache_valid_time: 3600
+
+- name: Check whether SPI is enabled
+  ansible.builtin.command: raspi-config nonint get_spi
+  register: spi_status
+  changed_when: false
 
 - name: Enable SPI
-  shell: "raspi-config nonint do_spi 0"
+  ansible.builtin.command: raspi-config nonint do_spi 0
+  when: spi_status.stdout | trim != "0"
+  changed_when: true
+  notify: Reboot Raspberry Pi
 
-- name: Clone a LCD-show github repository
-  git:
+- name: Ensure the source directory exists
+  ansible.builtin.file:
+    path: /usr/local/src
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clone the LCD-show repository
+  ansible.builtin.git:
     repo: https://github.com/goodtft/LCD-show.git
-    dest: /home/pi/LCD-show
-    clone: yes
-    update: yes
+    dest: /usr/local/src/LCD-show
+    version: 3fdfac02b914a7597a8010ece5b7082b9f5836e8
+    clone: true
+    update: true
 
-- name: Copy over boot overlays
-  copy:
-    src: /home/pi/LCD-show/usr/tft35a-overlay.dtb
-    dest: /boot/overlays/tft35a.dtbo
-    remote_src: yes
+- name: Check for the current Raspberry Pi OS boot layout
+  ansible.builtin.stat:
+    path: /boot/firmware/config.txt
+  register: firmware_boot_config
 
-- name: Edit /boot/config.txt
-  lineinfile:
-    dest: /boot/config.txt
+- name: Check for the legacy Raspberry Pi OS boot layout
+  ansible.builtin.stat:
+    path: /boot/config.txt
+  register: legacy_boot_config
+
+- name: Select the Raspberry Pi OS boot directory
+  ansible.builtin.set_fact:
+    rpi_boot_path: >-
+      {{ '/boot/firmware' if firmware_boot_config.stat.exists
+         else '/boot' if legacy_boot_config.stat.exists
+         else '' }}
+
+- name: Verify that a supported boot layout exists
+  ansible.builtin.assert:
+    that:
+      - rpi_boot_path | length > 0
+    fail_msg: No supported Raspberry Pi OS boot configuration was found.
+
+- name: Install the LCD device tree overlay
+  ansible.builtin.copy:
+    src: /usr/local/src/LCD-show/usr/tft35a-overlay.dtb
+    dest: "{{ rpi_boot_path }}/overlays/tft35a.dtbo"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reboot Raspberry Pi
+
+- name: Enable HDMI hotplug detection
+  ansible.builtin.lineinfile:
+    path: "{{ rpi_boot_path }}/config.txt"
     state: present
-    regexp: "^#hdmi_force_hotplug=1"
-    line: "hdmi_force_hotplug=1"
+    regexp: '^\s*#?\s*hdmi_force_hotplug='
+    line: hdmi_force_hotplug=1
+  notify: Reboot Raspberry Pi
 
 - name: Rotate the screen
-  lineinfile:
-    path: /boot/config.txt
-    line: "dtoverlay=tft35a:rotate=270"
-    create: yes
+  ansible.builtin.lineinfile:
+    path: "{{ rpi_boot_path }}/config.txt"
+    regexp: '^\s*#?\s*dtoverlay=tft35a(?:[:,].*)?$'
+    line: dtoverlay=tft35a:rotate=270
+  notify: Reboot Raspberry Pi
 
-- name: Edit /boot/cmdline.txt
-  lineinfile:
-    path: /boot/cmdline.txt
-    line: "fbcon=map:10 fbcon=font:VGA8x8"
-    create: yes
+- name: Read the kernel command line
+  ansible.builtin.slurp:
+    path: "{{ rpi_boot_path }}/cmdline.txt"
+  register: kernel_cmdline_file
 
-- name: console-setup charmap, codeset, font face and font size
-  lineinfile:
+- name: Decode the kernel command line
+  ansible.builtin.set_fact:
+    kernel_cmdline: "{{ kernel_cmdline_file.content | b64decode | trim }}"
+
+- name: Replace existing LCD console parameters
+  ansible.builtin.set_fact:
+    kernel_cmdline: >-
+      {{ kernel_cmdline
+         | regex_replace('(^|\s)fbcon=map:\S+', '\1fbcon=map:10')
+         | regex_replace('(^|\s)fbcon=font:\S+', '\1fbcon=font:VGA8x8') }}
+
+- name: Add missing LCD console parameters
+  ansible.builtin.set_fact:
+    kernel_cmdline_configured: >-
+      {{ kernel_cmdline
+         ~ ('' if 'fbcon=map:10' in kernel_cmdline.split()
+            else ' fbcon=map:10')
+         ~ ('' if 'fbcon=font:VGA8x8' in kernel_cmdline.split()
+            else ' fbcon=font:VGA8x8') }}
+
+- name: Configure the LCD kernel command line
+  ansible.builtin.copy:
+    dest: "{{ rpi_boot_path }}/cmdline.txt"
+    content: "{{ kernel_cmdline_configured }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reboot Raspberry Pi
+
+- name: Configure the console font
+  ansible.builtin.lineinfile:
     path: /etc/default/console-setup
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
-  with_items:
-    #charmap
-    - regexp: '^CHARMAP="'
+  loop:
+    - regexp: '^\s*#?\s*CHARMAP='
       line: CHARMAP="UTF-8"
-    #codeset
-    - regexp: '^CODESET="'
+    - regexp: '^\s*#?\s*CODESET='
       line: CODESET="guess"
-    #font face
-    - regexp: '^FONTFACE="'
+    - regexp: '^\s*#?\s*FONTFACE='
       line: FONTFACE="Terminus"
-    #font size
-    - regexp: '^FONTSIZE="'
+    - regexp: '^\s*#?\s*FONTSIZE='
       line: FONTSIZE="8x14"
-
-#REBOOT
-- name: Reboot the server
-  reboot:
